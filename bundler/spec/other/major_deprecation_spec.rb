@@ -371,25 +371,31 @@ RSpec.describe "major deprecations" do
   end
 
   context "bundle install with multiple sources" do
-    before do
+    it "shows a deprecation", :bundler => "< 3" do
       install_gemfile <<-G
         source "#{file_uri_for(gem_repo3)}"
         source "#{file_uri_for(gem_repo1)}"
       G
-    end
 
-    it "shows a deprecation", :bundler => "< 3" do
       expect(deprecations).to include(
         "Your Gemfile contains multiple primary sources. " \
         "Using `source` more than once without a block is a security risk, and " \
         "may result in installing unexpected gems. To resolve this warning, use " \
-        "a block to indicate which gems should come from the secondary source. " \
-        "To upgrade this warning to an error, run `bundle config set --local " \
-        "disable_multisource true`."
+        "a block to indicate which gems should come from the secondary source."
       )
     end
 
-    pending "fails with a helpful error", :bundler => "3"
+    it "fails with a helpful error", :bundler => "3" do
+      install_gemfile <<-G, :raise_on_error => false
+        source "#{file_uri_for(gem_repo3)}"
+        source "#{file_uri_for(gem_repo1)}"
+      G
+
+      expect(err).to include(
+        "This Gemfile contains multiple primary sources. " \
+        "Each source after the first must include a block to indicate which gems should come from that source."
+      )
+    end
   end
 
   context "when Bundler.setup is run in a ruby script" do

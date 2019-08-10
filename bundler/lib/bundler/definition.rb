@@ -332,6 +332,10 @@ module Bundler
       sources.rubygems_sources.any? {|s| s.remotes.any? }
     end
 
+    def has_global_path_source?
+      !sources.global_path_source.nil?
+    end
+
     def spec_git_paths
       sources.git_sources.map {|s| File.realpath(s.path) if File.exist?(s.path) }.compact
     end

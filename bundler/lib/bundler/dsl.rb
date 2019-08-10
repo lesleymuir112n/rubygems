@@ -24,6 +24,10 @@ module Bundler
     def initialize
       @source               = nil
       @sources              = SourceList.new
+
+      @global_rubygems_sources = []
+      @global_path_sources = []
+
       @git_sources          = {}
       @dependencies         = []
       @groups               = []
@@ -45,6 +49,7 @@ module Bundler
       @gemfiles << expanded_gemfile_path
       contents ||= Bundler.read_file(@gemfile.to_s)
       instance_eval(contents.dup.tap{|x| x.untaint if RUBY_VERSION < "2.7" }, gemfile.to_s, 1)
+      check_primary_source_safety
     rescue Exception => e # rubocop:disable Lint/RescueException
       message = "There was an error " \
         "#{e.is_a?(GemfileEvalError) ? "evaluating" : "parsing"} " \
@@ -164,7 +169,7 @@ module Bundler
       elsif block_given?
         with_source(@sources.add_rubygems_source("remotes" => source), &blk)
       else
-        check_primary_source_safety(@sources)
+        @global_rubygems_sources << source
         @sources.global_rubygems_source = source
       end
     end
@@ -183,6 +188,11 @@ module Bundler
     end
 
     def path(path, options = {}, &blk)
+      source_options = normalize_hash(options).merge(
+        "path" => Pathname.new(path),
+        "root_path" => gemfile_root,
+        "gemspec" => gemspecs.find {|g| g.name == options["name"] }
+      )
       unless block_given?
         msg = "You can no longer specify a path source by itself. Instead, \n" \
               "either use the :path option on a gem, or specify the gems that \n" \
@@ -193,14 +203,12 @@ module Bundler
               "    end\n\n"
 
         SharedHelpers.major_deprecation(2, msg.strip)
+
+        source_options["global"] = true
       end
 
-      source_options = normalize_hash(options).merge(
-        "path" => Pathname.new(path),
-        "root_path" => gemfile_root,
-        "gemspec" => gemspecs.find {|g| g.name == options["name"] }
-      )
       source = @sources.add_path_source(source_options)
+
       with_source(source, &blk)
     end
 
@@ -439,22 +447,23 @@ repo_name ||= user_name
       end
     end
 
-    def check_primary_source_safety(source_list)
-      return if source_list.rubygems_primary_remotes.empty? && source_list.global_rubygems_source.nil?
+    def check_primary_source_safety
+      if @global_rubygems_sources.size <= 1 && @global_path_sources.size == 0
+        Bundler.settings.temporary(:disable_multisource => true)
+      end
 
-      if Bundler.feature_flag.disable_multisource?
+      return if @global_rubygems_sources.size <= 1
+
+      if Bundler.feature_flag.bundler_3_mode?
         msg = "This Gemfile contains multiple primary sources. " \
           "Each source after the first must include a block to indicate which gems " \
-          "should come from that source. To downgrade this error to a warning, run " \
-          "`bundle config unset disable_multisource`"
+          "should come from that source"
         raise GemfileEvalError, msg
       else
         Bundler::SharedHelpers.major_deprecation 2, "Your Gemfile contains multiple primary sources. " \
           "Using `source` more than once without a block is a security risk, and " \
           "may result in installing unexpected gems. To resolve this warning, use " \
-          "a block to indicate which gems should come from the secondary source. " \
-          "To upgrade this warning to an error, run `bundle config set --local " \
-          "disable_multisource true`."
+          "a block to indicate which gems should come from the secondary source."
       end
     end
 

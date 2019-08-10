@@ -20,7 +20,6 @@ module Bundler
       disable_checksum_validation
       disable_exec_load
       disable_local_branch_check
-      disable_multisource
       disable_shared_gems
       disable_version_check
       force_ruby_platform
@@ -116,6 +115,10 @@ module Bundler
       ensure
         existing.each {|k, v| set_key(k, v, @temporary, nil) }
       end
+    end
+
+    def temporary_value_for(key)
+      @temporary[key_for(key)]
     end
 
     def set_global(key, value)

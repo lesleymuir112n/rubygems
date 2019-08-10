@@ -89,7 +89,7 @@ module Bundler
         Bundler.ui.warn "Some gems seem to be missing from your #{Bundler.settings.app_cache_path} directory."
       end
 
-      unless Bundler.definition.has_rubygems_remotes?
+      unless Bundler.definition.has_rubygems_remotes? || Bundler.definition.has_global_path_source?
         Bundler.ui.warn <<-WARN, :wrap => true
           Your Gemfile has no gem server sources. If you need gems that are \
           not already on your machine, add a line like this to your Gemfile:
